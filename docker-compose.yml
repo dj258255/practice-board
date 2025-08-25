@@ -1,0 +1,276 @@
+version: "3.8"
+
+services:
+  # Nginx Load Balancer
+  nginx:
+    image: ${NGINX_IMAGE:-nginx:alpine}
+    container_name: nginx-lb
+    profiles:
+      - app
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_logs:/var/log/nginx  # Nginx 로그를 Promtail과 공유
+    networks:
+      - monitoring
+    depends_on:
+      - app1
+      - app2
+
+  # Spring Boot Application Instance 1
+  app1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: practice-board-app1
+    profiles:
+      - app
+    ports:
+      - "8081:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8080
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - monitoring
+    depends_on:
+      - mysql
+      - rabbitmq
+      - redis
+    volumes:
+      - ./logs:/app/logs
+
+  # Spring Boot Application Instance 2
+  app2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: practice-board-app2
+    profiles:
+      - app
+    ports:
+      - "8082:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8080
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - monitoring
+    depends_on:
+      - mysql
+      - rabbitmq
+      - redis
+    volumes:
+      - ./logs:/app/logs
+
+  # MySQL Database
+  mysql:
+    image: ${MYSQL_IMAGE:-mysql:8.0}
+    container_name: mysql-db
+    profiles:
+      - app
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - mysql_logs:/var/log/mysql  # MySQL 로그를 Promtail과 공유
+    networks:
+      - monitoring
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --log-error=/var/log/mysql/error.log --general_log=1 --general_log_file=/var/log/mysql/general.log
+
+  # MySQL Exporter (MySQL 메트릭 수집)
+  mysql-exporter:
+    image: prom/mysqld-exporter:latest
+    container_name: mysql-exporter
+    profiles:
+      - app
+    ports:
+      - "9104:9104"
+    environment:
+      DATA_SOURCE_NAME: "${MYSQL_USER}:${MYSQL_PASSWORD}@(mysql:3306)/"
+    networks:
+      - monitoring
+    depends_on:
+      - mysql
+  # RabbitMQ
+  rabbitmq:
+    image: ${RABBITMQ_IMAGE}
+    container_name: rabbitmq
+    hostname: my-rabbit
+    ports:
+      - "${RABBITMQ_AMQP_PORT}:5672"
+      - "${RABBITMQ_UI_PORT}:15672"
+      - "15692:15692"  # Prometheus metrics port
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    command: >
+      bash -c "
+        rabbitmq-plugins enable --offline rabbitmq_management rabbitmq_prometheus &&
+        rabbitmq-server
+      "
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - monitoring
+
+  # Redis
+  redis:
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    container_name: redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - monitoring
+
+  # Redis Exporter (Redis 메트릭 수집)
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    networks:
+      - monitoring
+    depends_on:
+      - redis
+
+  # Prometheus
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:latest}
+    container_name: prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prometheus:/etc/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - monitoring
+
+  # Grafana
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:latest}
+    container_name: grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+      - loki
+
+  # Loki
+  loki:
+    image: ${LOKI_IMAGE:-grafana/loki:latest}
+    container_name: loki
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+      - ./loki:/etc/loki
+    networks:
+      - monitoring
+
+  # Promtail (Loki용 로그 수집기)
+  promtail:
+    image: ${PROMTAIL_IMAGE:-grafana/promtail:latest}
+    container_name: promtail
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./promtail:/etc/promtail
+      - ./logs:/var/log/practice-board:ro  # 애플리케이션 로그 파일 접근
+      - nginx_logs:/var/log/nginx:ro       # Nginx 로그 접근
+      - mysql_logs:/var/log/mysql:ro       # MySQL 로그 접근
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+
+  # K6 (필요할 때만 실행)
+  k6:
+    image: ${K6_IMAGE:-grafana/k6:latest}
+    container_name: k6
+    profiles:
+      - testing
+    environment:
+      K6_OUT: influxdb=http://influxdb:8086/k6
+    volumes:
+      - ./k6:/scripts
+    command: run /scripts/load-test.js
+    networks:
+      - monitoring
+    depends_on:
+      - influxdb
+
+  # InfluxDB (K6 메트릭 저장용)
+  influxdb:
+    image: ${INFLUXDB_IMAGE:-influxdb:1.8-alpine}
+    container_name: influxdb
+    profiles:
+      - testing
+    ports:
+      - "${INFLUXDB_PORT:-8086}:8086"
+    environment:
+      INFLUXDB_DB: k6
+      INFLUXDB_HTTP_MAX_BODY_SIZE: 0
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+    networks:
+      - monitoring
+
+volumes:
+  rabbitmq_data:
+  redis_data:
+  grafana_data:
+  loki_data:
+  influxdb_data:
+  prometheus_data:
+  mysql_data:
+  nginx_logs:
+  mysql_logs:
+
+networks:
+  monitoring:
+    driver: bridge

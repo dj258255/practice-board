@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew clean:*)",
+      "Bash(where gradle)",
+      "Bash(cmd /c:*)",
+      "Read(/C:\\Program Files/**)",
+      "Read(/C:\\/**)",
+      "Bash(\"/c/Users/SSAFY/.gradle/wrapper/dists/gradle-8.5-bin/5t9huq95ubn472n8rpzujfbqh/gradle-8.5/bin/gradle.bat\" clean build)",
+      "Bash(rmdir:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

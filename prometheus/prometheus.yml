@@ -1,0 +1,57 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+# - "first_rules.yml"
+# - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus 자체 모니터링
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # RabbitMQ 메트릭 (플러그인 활성화 필요)
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq:15692']
+    metrics_path: /metrics
+
+  # Redis Exporter를 통한 메트릭 수집
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # Node Exporter (시스템 메트릭, 필요시 추가)
+  # - job_name: 'node'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
+
+  # Grafana 메트릭
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+
+  # MySQL Exporter를 통한 메트릭 수집
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['mysql-exporter:9104']
+
+  # Nginx 메트릭 (nginx-prometheus-exporter 필요시)
+  # - job_name: 'nginx'
+  #   static_configs:
+  #     - targets: ['nginx-exporter:9113']
+
+  # Spring Boot 애플리케이션 메트릭 (Actuator Prometheus 엔드포인트)
+  - job_name: 'spring-boot-app1'
+    static_configs:
+      - targets: ['app1:8080']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s
+
+  - job_name: 'spring-boot-app2'
+    static_configs:
+      - targets: ['app2:8080']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" monitorInterval="30">
+    <Properties>
+        <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</Property>
+        <Property name="JSON_PATTERN">{"timestamp":"%d{yyyy-MM-dd'T'HH:mm:ss.SSSZ}","level":"%level","thread":"%t","logger":"%logger{36}","message":"%msg","exception":"%ex"}%n</Property>
+    </Properties>
+
+    <Appenders>
+        <!-- Console Appender (JSON format for container logs) -->
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="${JSON_PATTERN}"/>
+        </Console>
+
+        <!-- File Appender (Standard format) -->
+        <File name="FileAppender" fileName="/app/logs/application.log">
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+        </File>
+
+        <!-- Rolling File Appender (Standard format) -->
+        <RollingFile name="RollingFileAppender" fileName="/app/logs/app.log"
+                     filePattern="/app/logs/app-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy />
+                <SizeBasedTriggeringPolicy size="10MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="10"/>
+        </RollingFile>
+
+        <!-- JSON File Appender (for Loki) -->
+        <RollingFile name="JsonFileAppender" fileName="/app/logs/application.json"
+                     filePattern="/app/logs/application-%d{yyyy-MM-dd}-%i.json.gz">
+            <PatternLayout pattern="${JSON_PATTERN}"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy />
+                <SizeBasedTriggeringPolicy size="50MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="5"/>
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <!-- Spring Framework -->
+        <Logger name="org.springframework" level="INFO" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="RollingFileAppender"/>
+            <AppenderRef ref="JsonFileAppender"/>
+        </Logger>
+
+        <!-- Hibernate/JPA -->
+        <Logger name="org.hibernate" level="INFO" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="RollingFileAppender"/>
+            <AppenderRef ref="JsonFileAppender"/>
+        </Logger>
+        
+        <Logger name="org.hibernate.SQL" level="DEBUG" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="RollingFileAppender"/>
+            <AppenderRef ref="JsonFileAppender"/>
+        </Logger>
+
+        <!-- Application Logger -->
+        <Logger name="io.github.beom" level="DEBUG" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="RollingFileAppender"/>
+            <AppenderRef ref="JsonFileAppender"/>
+        </Logger>
+
+        <!-- Actuator/Micrometer (for monitoring) -->
+        <Logger name="io.micrometer" level="INFO" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="RollingFileAppender"/>
+            <AppenderRef ref="JsonFileAppender"/>
+        </Logger>
+
+        <!-- Root Logger -->
+        <Root level="INFO">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="RollingFileAppender"/>
+            <AppenderRef ref="JsonFileAppender"/>
+        </Root>
+    </Loggers>
+</Configuration>

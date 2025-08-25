@@ -1,0 +1,17 @@
+#!/bin/bash
+echo "Starting monitoring stack..."
+docker-compose up -d
+echo ""
+echo "Monitoring services started!"
+echo ""
+echo "Access URLs:"
+echo "- Grafana: http://localhost:3000 (admin/admin123)"
+echo "- Prometheus: http://localhost:9090"
+echo "- RabbitMQ Management: http://localhost:15672 (devuser/devpassword)"
+echo "- Loki: http://localhost:3100"
+echo ""
+echo "To run load tests:"
+echo "docker-compose --profile testing up k6"
+echo ""
+echo "To stop all services:"
+echo "docker-compose down"
